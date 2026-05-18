@@ -127,6 +127,23 @@
 
         button:disabled { opacity: 0.4; cursor: not-allowed; }
 
+        .mobile-only { display: none; }
+        .desktop-only { display: block; }
+
+        .mobile-hint {
+            font-size: 11px;
+            color: var(--ink-faint);
+            margin-top: 16px;
+            line-height: 1.5;
+            text-align: center;
+            font-weight: 300;
+        }
+
+        @media (max-width: 768px) {
+            .desktop-only { display: none !important; }
+            .mobile-only { display: block; }
+        }
+
         .result {
             margin-top: 40px;
             opacity: 0;
@@ -352,9 +369,13 @@
             >
         </div>
 
-        <button id="generateBtn" onclick="startRadio()">
+        <button id="generateBtn" class="desktop-only" onclick="startRadio()">
             <span id="btnText">Start Radio</span>
         </button>
+        <button id="mobileBtn" class="mobile-only" onclick="openInSpotify()">
+            <span id="mobileBtnText">Open in Spotify</span>
+        </button>
+        <p class="mobile-hint mobile-only">Mobile browsers can't autoplay full tracks. We'll build a 30-song playlist in your Spotify account and hand off to the app.</p>
 
         <div class="result" id="result"></div>
 
@@ -663,6 +684,50 @@
         checkAuth();
         if (location.search.includes("logged_in=1")) {
             window.history.replaceState({}, "", "/");
+        }
+
+        async function openInSpotify() {
+            const mood = input.value.trim();
+            if (!mood) return;
+
+            const mobileBtn = document.getElementById("mobileBtn");
+            const mobileBtnText = document.getElementById("mobileBtnText");
+
+            // Auth check — playlist creation requires the user to be logged in.
+            try {
+                const auth = await fetch(`${API}/me`).then(r => r.json());
+                if (!auth.logged_in) {
+                    mobileBtnText.textContent = "Connect Spotify first ↑";
+                    mobileBtn.disabled = true;
+                    setTimeout(() => {
+                        mobileBtnText.textContent = "Open in Spotify";
+                        mobileBtn.disabled = false;
+                    }, 2500);
+                    return;
+                }
+            } catch (_) {}
+
+            mobileBtn.disabled = true;
+            mobileBtnText.innerHTML = '<span class="loader"></span>Building playlist...';
+
+            try {
+                const res = await fetch(`${API}/playlist/create`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ mood }),
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || "Failed");
+
+                // Spotify smart-link: opens the app if installed, web otherwise.
+                window.location.href = data.url;
+            } catch (err) {
+                console.error(err);
+                mobileBtn.disabled = false;
+                mobileBtnText.textContent = err.message.includes("reconnect")
+                    ? "Reconnect Spotify"
+                    : "Failed — tap to retry";
+            }
         }
 
         async function startRadio() {
