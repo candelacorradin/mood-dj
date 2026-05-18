@@ -337,7 +337,7 @@
         <p class="subtitle">Tell us how you feel and we'll spin a continuous radio for you</p>
 
         <div class="auth-bar">
-            <a id="authBtn" class="auth-btn" href="http://127.0.0.1:8000/login">
+            <a id="authBtn" class="auth-btn" href="/login">
                 <span class="dot"></span>
                 <span id="authLabel">Connect Spotify</span>
             </a>
@@ -362,7 +362,9 @@
 
     <script src="https://open.spotify.com/embed/iframe-api/v1" async></script>
     <script>
-        const API = "http://127.0.0.1:8000";
+        // Empty string = relative URLs, so /generate, /login, etc. resolve
+        // to whatever host is serving the page (localhost in dev, Render in prod).
+        const API = "";
         const btn = document.getElementById("generateBtn");
         const btnText = document.getElementById("btnText");
         const resultDiv = document.getElementById("result");
