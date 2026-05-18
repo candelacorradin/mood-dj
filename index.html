@@ -717,6 +717,17 @@
                     body: JSON.stringify({ mood }),
                 });
                 const data = await res.json();
+
+                // If the cached token is missing the playlist scope, the
+                // backend wipes the cache and tells us to reconnect. Send the
+                // user through /login?force=1 to force Spotify's consent
+                // screen so the new scope actually gets granted.
+                if (res.status === 403 && (data.detail || "").includes("reconnect")) {
+                    mobileBtnText.textContent = "Reconnecting…";
+                    window.location.href = `${API}/login?force=1`;
+                    return;
+                }
+
                 if (!res.ok) throw new Error(data.detail || "Failed");
 
                 // Spotify smart-link: opens the app if installed, web otherwise.
@@ -724,9 +735,7 @@
             } catch (err) {
                 console.error(err);
                 mobileBtn.disabled = false;
-                mobileBtnText.textContent = err.message.includes("reconnect")
-                    ? "Reconnect Spotify"
-                    : "Failed — tap to retry";
+                mobileBtnText.textContent = "Failed — tap to retry";
             }
         }
 

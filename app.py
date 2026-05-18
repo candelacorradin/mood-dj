@@ -56,7 +56,7 @@ SEARCH_LIMIT = 10  # max permitido por /v1/search
 # User auth helpers
 # ---------------------------------------------------------------------------
 
-def _user_oauth() -> SpotifyOAuth:
+def _user_oauth(force_dialog: bool = False) -> SpotifyOAuth:
     return SpotifyOAuth(
         client_id=client_id,
         client_secret=client_secret,
@@ -64,6 +64,7 @@ def _user_oauth() -> SpotifyOAuth:
         scope="user-top-read user-read-recently-played playlist-modify-private",
         cache_path=USER_CACHE,
         open_browser=False,
+        show_dialog=force_dialog,
     )
 
 
@@ -490,8 +491,11 @@ def radio_next(
 # ---------------------------------------------------------------------------
 
 @app.get("/login")
-def login():
-    return RedirectResponse(_user_oauth().get_authorize_url())
+def login(force: int = 0):
+    # When ?force=1, Spotify is told to show the consent dialog even if the
+    # user is already authorised — needed when we add new scopes so the
+    # existing grant is replaced rather than silently re-issued.
+    return RedirectResponse(_user_oauth(force_dialog=bool(force)).get_authorize_url())
 
 
 @app.get("/callback")
@@ -567,10 +571,20 @@ def create_playlist(payload: dict = Body(...)):
             "track_count": len(uris),
         }
     except SpotifyException as exc:
+        logger.warning(
+            f"Spotify rejected playlist create: status={exc.http_status} "
+            f"code={exc.code} msg={exc.msg}"
+        )
         if exc.http_status in (401, 403):
+            # Wipe the cached token so /login?force=1 starts a clean grant.
+            if os.path.exists(USER_CACHE):
+                try:
+                    os.remove(USER_CACHE)
+                except OSError:
+                    pass
             raise HTTPException(
                 status_code=403,
-                detail="Please reconnect Spotify — playlist permission needed.",
+                detail="reconnect",
             )
         logger.exception("Failed to create playlist")
         raise HTTPException(status_code=500, detail="Could not create playlist")
