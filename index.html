@@ -128,7 +128,6 @@
         button:disabled { opacity: 0.4; cursor: not-allowed; }
 
         .mobile-only { display: none; }
-        .desktop-only { display: block; }
 
         .mobile-hint {
             font-size: 11px;
@@ -140,7 +139,6 @@
         }
 
         @media (max-width: 768px) {
-            .desktop-only { display: none !important; }
             .mobile-only { display: block; }
         }
 
@@ -369,13 +367,10 @@
             >
         </div>
 
-        <button id="generateBtn" class="desktop-only" onclick="startRadio()">
+        <button id="generateBtn" onclick="startRadio()">
             <span id="btnText">Start Radio</span>
         </button>
-        <button id="mobileBtn" class="mobile-only" onclick="openInSpotify()">
-            <span id="mobileBtnText">Open in Spotify</span>
-        </button>
-        <p class="mobile-hint mobile-only">Mobile browsers can't autoplay full tracks. We'll build a 30-song playlist in your Spotify account and hand off to the app.</p>
+        <p class="mobile-hint mobile-only">Best experienced on desktop — mobile browsers only play 30-second previews and can't autoplay between tracks.</p>
 
         <div class="result" id="result"></div>
 
@@ -684,74 +679,6 @@
         checkAuth();
         if (location.search.includes("logged_in=1")) {
             window.history.replaceState({}, "", "/");
-        }
-
-        async function openInSpotify() {
-            const mood = input.value.trim();
-            if (!mood) return;
-
-            const mobileBtn = document.getElementById("mobileBtn");
-            const mobileBtnText = document.getElementById("mobileBtnText");
-
-            // Auth check — playlist creation requires the user to be logged in.
-            try {
-                const auth = await fetch(`${API}/me`).then(r => r.json());
-                if (!auth.logged_in) {
-                    mobileBtnText.textContent = "Connect Spotify first ↑";
-                    mobileBtn.disabled = true;
-                    setTimeout(() => {
-                        mobileBtnText.textContent = "Open in Spotify";
-                        mobileBtn.disabled = false;
-                    }, 2500);
-                    return;
-                }
-            } catch (_) {}
-
-            mobileBtn.disabled = true;
-            mobileBtnText.innerHTML = '<span class="loader"></span>Building playlist...';
-
-            try {
-                const res = await fetch(`${API}/playlist/create`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ mood }),
-                });
-                const data = await res.json();
-
-                // 403 from Spotify: try reconnecting *once* in case it's a
-                // missing-scope issue. If we've already attempted that this
-                // session, surface the real error instead of looping.
-                if (res.status === 403) {
-                    const alreadyRetried = sessionStorage.getItem("mooddj-reconnect-tried") === "1";
-                    if (!alreadyRetried) {
-                        sessionStorage.setItem("mooddj-reconnect-tried", "1");
-                        mobileBtnText.textContent = "Reconnecting…";
-                        window.location.href = `${API}/login?force=1`;
-                        return;
-                    }
-                    throw new Error(data.detail || "Spotify rejected the request");
-                }
-
-                if (!res.ok) throw new Error(data.detail || "Failed");
-
-                // Success — clear the retry flag and hand off to Spotify.
-                sessionStorage.removeItem("mooddj-reconnect-tried");
-                window.location.href = data.url;
-            } catch (err) {
-                console.error(err);
-                mobileBtn.disabled = false;
-                mobileBtnText.textContent = "Failed — see message below";
-                // Show the real error so we can diagnose.
-                let errBox = document.getElementById("mobileErr");
-                if (!errBox) {
-                    errBox = document.createElement("p");
-                    errBox.id = "mobileErr";
-                    errBox.className = "error";
-                    errBox.style.marginTop = "16px";
-                    mobileBtn.parentNode.appendChild(errBox);
-                }
-                errBox.textContent = String(err.message || err);
-            }
         }
 
         async function startRadio() {
