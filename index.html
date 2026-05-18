@@ -718,24 +718,39 @@
                 });
                 const data = await res.json();
 
-                // If the cached token is missing the playlist scope, the
-                // backend wipes the cache and tells us to reconnect. Send the
-                // user through /login?force=1 to force Spotify's consent
-                // screen so the new scope actually gets granted.
-                if (res.status === 403 && (data.detail || "").includes("reconnect")) {
-                    mobileBtnText.textContent = "Reconnecting…";
-                    window.location.href = `${API}/login?force=1`;
-                    return;
+                // 403 from Spotify: try reconnecting *once* in case it's a
+                // missing-scope issue. If we've already attempted that this
+                // session, surface the real error instead of looping.
+                if (res.status === 403) {
+                    const alreadyRetried = sessionStorage.getItem("mooddj-reconnect-tried") === "1";
+                    if (!alreadyRetried) {
+                        sessionStorage.setItem("mooddj-reconnect-tried", "1");
+                        mobileBtnText.textContent = "Reconnecting…";
+                        window.location.href = `${API}/login?force=1`;
+                        return;
+                    }
+                    throw new Error(data.detail || "Spotify rejected the request");
                 }
 
                 if (!res.ok) throw new Error(data.detail || "Failed");
 
-                // Spotify smart-link: opens the app if installed, web otherwise.
+                // Success — clear the retry flag and hand off to Spotify.
+                sessionStorage.removeItem("mooddj-reconnect-tried");
                 window.location.href = data.url;
             } catch (err) {
                 console.error(err);
                 mobileBtn.disabled = false;
-                mobileBtnText.textContent = "Failed — tap to retry";
+                mobileBtnText.textContent = "Failed — see message below";
+                // Show the real error so we can diagnose.
+                let errBox = document.getElementById("mobileErr");
+                if (!errBox) {
+                    errBox = document.createElement("p");
+                    errBox.id = "mobileErr";
+                    errBox.className = "error";
+                    errBox.style.marginTop = "16px";
+                    mobileBtn.parentNode.appendChild(errBox);
+                }
+                errBox.textContent = String(err.message || err);
             }
         }
 

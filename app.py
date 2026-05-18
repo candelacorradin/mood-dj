@@ -514,9 +514,11 @@ def me():
         return {"logged_in": False}
     try:
         profile = user_sp.me()
+        cached = _user_oauth().get_cached_token()
         return {
             "logged_in": True,
             "name": profile.get("display_name") or profile["id"],
+            "scopes": (cached or {}).get("scope", ""),
         }
     except Exception:
         return {"logged_in": False}
@@ -576,17 +578,11 @@ def create_playlist(payload: dict = Body(...)):
             f"code={exc.code} msg={exc.msg}"
         )
         if exc.http_status in (401, 403):
-            # Wipe the cached token so /login?force=1 starts a clean grant.
-            if os.path.exists(USER_CACHE):
-                try:
-                    os.remove(USER_CACHE)
-                except OSError:
-                    pass
             raise HTTPException(
                 status_code=403,
-                detail="reconnect",
+                detail=f"Spotify rejected the request ({exc.http_status}): {exc.msg or 'no message'}",
             )
         logger.exception("Failed to create playlist")
-        raise HTTPException(status_code=500, detail="Could not create playlist")
+        raise HTTPException(status_code=500, detail=f"Could not create playlist: {exc.msg or exc}")
 
 
